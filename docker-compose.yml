@@ -1,0 +1,12 @@
+version: "2"
+
+services:
+  mysql-local:
+    image: mysql
+    ports:
+      - 3306:3306
+    volumes:
+      - ./Docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-import-data.sql
+    environment:
+      - MYSQL_USER=devadmin
+      - MYSQL_ROOT_PASSWORD=devadmin

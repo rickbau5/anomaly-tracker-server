@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/routes"
 	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/tracker"
 	"golang.org/x/net/unix"
 )
@@ -15,11 +17,18 @@ import (
 func main() {
 	conf := tracker.InitConfig()
 
+	err := tracker.InitializeAppDB(conf)
+	if err != nil {
+		log.Fatalln("Failed to initialize app db:", err)
+	}
+	defer tracker.CleanupAppDB()
+
 	server := &http.Server{
 		Addr:         conf.ListenAddr,
 		IdleTimeout:  conf.IdleTimeout,
 		ReadTimeout:  conf.ReadTimeout,
 		WriteTimeout: conf.WriteTimeout,
+		Handler:      routes.PathLogger(routes.Init(true)),
 	}
 
 	go runSever(server)
@@ -42,7 +51,7 @@ func awaitShutdown(server *http.Server) error {
 	stop := <-c
 	fmt.Println("Got stop signal:", stop.String())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	err := server.Shutdown(ctx)
