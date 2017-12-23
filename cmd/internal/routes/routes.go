@@ -14,6 +14,8 @@ import (
 
 type response struct {
 	Error string `json:"error,omitempty"`
+
+	StatusCode int `json:"-"`
 }
 
 var debugMode = false
@@ -22,7 +24,7 @@ func Init(debug bool) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", healthcheck)
-	mux.HandleFunc("/add", Method("post", Authenticate(addAnomaly)))
+	mux.HandleFunc("/anomaly", Authenticate(handleAnomaly))
 
 	debugMode = debug
 
@@ -44,25 +46,12 @@ func Authenticate(next http.HandlerFunc) http.HandlerFunc {
 
 func PathLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.URL.Path)
+		log.Println(r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
 }
 
-func addAnomaly(w http.ResponseWriter, r *http.Request) {
-	bytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		writeErrorResponse("Failed reading body", http.StatusNotAcceptable, w)
-		return
-	}
-
-	anomaly := tracker.Anomaly{}
-	err = json.Unmarshal(bytes, &anomaly)
-	if err != nil {
-		writeErrorResponse("Failed reading anomaly", http.StatusNotAcceptable, w)
-		return
-	}
-
+func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 	i := r.Context().Value("api_key")
 	apiKey, ok := i.(tracker.APIKey)
 	if !ok {
@@ -70,19 +59,50 @@ func addAnomaly(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse("Interanl error", http.StatusInternalServerError, w)
 		return
 	}
-	err = tracker.AddAnomaly(anomaly, apiKey)
-	if err != nil {
-		log.Println("Failed adding anomaly:", err.Error())
-		if tracker.IsErrAnomaly(err) {
-			writeErrorResponse("Malformed anomaly", http.StatusNotAcceptable, w)
-		} else {
-			writeErrorResponse(sanitizeError(err), http.StatusNotAcceptable, w)
+
+	var anomaly tracker.Anomaly
+
+	if r.Method != http.MethodGet {
+		bytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			writeErrorResponse("Failed reading body", http.StatusNotAcceptable, w)
+			return
 		}
-		return
+
+		err = json.Unmarshal(bytes, &anomaly)
+		if err != nil {
+			writeErrorResponse("Failed reading anomaly", http.StatusNotAcceptable, w)
+			return
+		}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("All good."))
+	var resp response
+	switch r.Method {
+	case http.MethodPost:
+		resp = addAnomaly(anomaly, apiKey)
+	default:
+		resp = response{
+			Error:      "Unrecognized method: " + r.Method,
+			StatusCode: http.StatusMethodNotAllowed,
+		}
+	}
+	writeFullResponse(resp, w)
+}
+
+func addAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
+	err := tracker.AddAnomaly(anomaly, apiKey)
+	if err != nil {
+		log.Println("Failed adding anomaly:", err.Error())
+		return response{
+			Error:      sanitizeError(err),
+			StatusCode: http.StatusNotAcceptable,
+		}
+	}
+
+	return response{}
+}
+
+func deleteAnomaly(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeErrorResponse(message string, status int, w http.ResponseWriter) {
@@ -104,6 +124,17 @@ func writeResponse(res response, w http.ResponseWriter) {
 	w.Write(bytes)
 }
 
+func writeFullResponse(res response, w http.ResponseWriter) {
+	bytes, err := json.MarshalIndent(res, "", "    ")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(res.StatusCode)
+	w.Write(bytes)
+}
+
 func healthcheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("^.^"))
@@ -112,6 +143,9 @@ func healthcheck(w http.ResponseWriter, r *http.Request) {
 func sanitizeError(err error) string {
 	if debugMode {
 		return err.Error()
+	}
+	if tracker.IsErrAnomaly(err) {
+		return "Malformed anomaly"
 	}
 	return "Internal error"
 }

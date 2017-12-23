@@ -32,7 +32,7 @@ type AnomalyType string
 const (
 	CombatAnomaly  AnomalyType = "Combat"
 	DataAnomaly    AnomalyType = "Data"
-	RelicAnomaly   AnomalyType = "Relict"
+	RelicAnomaly   AnomalyType = "Relic"
 	GasAnomaly     AnomalyType = "Gas"
 	IceAnomaly     AnomalyType = "Ice"
 	UnknownAnomaly AnomalyType = "unknown"
