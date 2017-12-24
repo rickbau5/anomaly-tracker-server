@@ -42,6 +42,28 @@ func CommitAnomaly(anomaly Anomaly, apiKey APIKey) error {
 	return err
 }
 
+func DeleteAnomaly(anomaly Anomaly, apiKey APIKey) error {
+	row := appDB.QueryRow(
+		"SELECT id FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ?",
+		anomaly.ID, apiKey.UserID,
+	)
+	var anomalyDBID int
+	if err := row.Scan(&anomalyDBID); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrAnomalyNotFound
+		}
+		return err
+	}
+	log.Printf("Deleting anomaly id '%s' (%d) for API key '%s'.\n", anomaly.ID, anomalyDBID, apiKey.Key)
+	res, err := appDB.Exec("DELETE FROM anomaly_tracker.anomalies where id = ?", anomalyDBID)
+	if err != nil {
+		return err
+	}
+	affected, _ := res.RowsAffected()
+	log.Printf("Deleted %d anomaly.\n", affected)
+	return nil
+}
+
 func CheckAPIKey(apiKey string) (*APIKey, error) {
 	row := appDB.QueryRow("SELECT * FROM anomaly_tracker.api_keys where `key` = ?;", apiKey)
 	var key APIKey

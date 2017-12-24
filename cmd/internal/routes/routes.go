@@ -13,7 +13,8 @@ import (
 )
 
 type response struct {
-	Error string `json:"error,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
 
 	StatusCode int `json:"-"`
 }
@@ -80,6 +81,8 @@ func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		resp = addAnomaly(anomaly, apiKey)
+	case http.MethodDelete:
+		resp = deleteAnomaly(anomaly, apiKey)
 	default:
 		resp = response{
 			Error:      "Unrecognized method: " + r.Method,
@@ -99,10 +102,25 @@ func addAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
 		}
 	}
 
-	return response{}
+	return response{
+		StatusCode: http.StatusCreated,
+		Message:    "created",
+	}
 }
 
-func deleteAnomaly(w http.ResponseWriter, r *http.Request) {
+func deleteAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
+	err := tracker.DeleteAnomaly(anomaly, apiKey)
+	if err != nil {
+		log.Println("Failed deleting anomaly:", err.Error())
+		return response{
+			Error:      sanitizeError(err),
+			StatusCode: http.StatusNotAcceptable,
+		}
+	}
+	return response{
+		StatusCode: http.StatusOK,
+		Message:    "deleted",
+	}
 }
 
 func writeErrorResponse(message string, status int, w http.ResponseWriter) {
@@ -145,7 +163,7 @@ func sanitizeError(err error) string {
 		return err.Error()
 	}
 	if tracker.IsErrAnomaly(err) {
-		return "Malformed anomaly"
+		return tracker.GetErrAnomalyMessage(err)
 	}
 	return "Internal error"
 }

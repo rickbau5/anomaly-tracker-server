@@ -9,7 +9,8 @@ create table `anomaly_tracker`.`anomalies` (
     `anom_type` varchar(16) not null,
     `anom_name` varchar(64) not null,
     `user_id` int not null,
-    primary key (id)
+    primary key (`id`),
+    unique key (`anom_id`, `user_id`)
 );
 
 create table `anomaly_tracker`.`api_keys` (
@@ -17,14 +18,14 @@ create table `anomaly_tracker`.`api_keys` (
     `key` varchar(64) not null,
     `type` varchar(32) not null default "user",
     `user_id` int not null,
-    primary key (id),
+    primary key (`id`)
 );
 
 create table `anomaly_tracker`.`users` (
     `id` int not null auto_increment,
     `username` varchar(16) not null,
     `created` datetime not null default NOW(),
-    primary key (id)
+    primary key (`id`)
 );
 
 insert anomaly_tracker.users (`username`) 

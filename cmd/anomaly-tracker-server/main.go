@@ -28,7 +28,7 @@ func main() {
 		IdleTimeout:  conf.IdleTimeout,
 		ReadTimeout:  conf.ReadTimeout,
 		WriteTimeout: conf.WriteTimeout,
-		Handler:      routes.PathLogger(routes.Init(true)),
+		Handler:      routes.PathLogger(routes.Init(false)),
 	}
 
 	go runSever(server)

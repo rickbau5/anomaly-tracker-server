@@ -22,6 +22,7 @@ var (
 	ErrAnomalyMissingType   = errors.New("anomaly: missing Type")
 	ErrAnomalyInvalidType   = errors.New("anomaly: invalid Type")
 	ErrAnomalyMissingName   = errors.New("anomaly: missing Name")
+	ErrAnomalyNotFound      = errors.New("anomaly: anomaly not found")
 
 	idRegex = regexp.MustCompile(`^[A-Z0-9]{3}\-[A-Z0-9]{3}$`)
 )
@@ -57,6 +58,15 @@ func GetAnomalyType(str string) AnomalyType {
 
 func IsErrAnomaly(err error) bool {
 	return strings.Contains(err.Error(), "anomaly:")
+}
+
+func GetErrAnomalyMessage(err error) string {
+	str := strings.Replace(err.Error(), "anomaly: ", "", 1)
+	if len(str) == len(err.Error()) {
+		// Not an anomaly error
+		return ""
+	}
+	return str
 }
 
 func (a *Anomaly) Validate() error {
