@@ -13,8 +13,9 @@ import (
 )
 
 type response struct {
-	Error   string `json:"error,omitempty"`
-	Message string `json:"message,omitempty"`
+	Error   string           `json:"error,omitempty"`
+	Message string           `json:"message,omitempty"`
+	Anomaly *tracker.Anomaly `json:"anomaly,omitempty"`
 
 	StatusCode int `json:"-"`
 }
@@ -83,6 +84,8 @@ func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 		resp = addAnomaly(anomaly, apiKey)
 	case http.MethodDelete:
 		resp = deleteAnomaly(anomaly, apiKey)
+	case http.MethodPatch:
+		resp = updateAnomaly(anomaly, apiKey)
 	default:
 		resp = response{
 			Error:      "Unrecognized method: " + r.Method,
@@ -120,6 +123,22 @@ func deleteAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
 	return response{
 		StatusCode: http.StatusOK,
 		Message:    "deleted",
+	}
+}
+
+func updateAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
+	updatedAnomaly, err := tracker.ModifyAnomaly(anomaly, apiKey)
+	if err != nil {
+		log.Println("Failed updating anomaly:", err.Error())
+		return response{
+			Error:      sanitizeError(err),
+			StatusCode: http.StatusNotAcceptable,
+		}
+	}
+	return response{
+		StatusCode: http.StatusOK,
+		Message:    "updated",
+		Anomaly:    updatedAnomaly,
 	}
 }
 

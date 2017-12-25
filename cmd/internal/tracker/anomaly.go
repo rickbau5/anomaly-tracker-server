@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"database/sql"
 	"errors"
 	"log"
 	"regexp"
@@ -12,6 +13,8 @@ type Anomaly struct {
 	System string      `json:"system"`
 	Type   AnomalyType `json:"type"`
 	Name   string      `json:"name"`
+
+	id int `json:"-"`
 }
 
 // Anomaly Errors
@@ -102,7 +105,7 @@ func AddAnomaly(anomaly Anomaly, apiKey APIKey) error {
 	if err := CommitAnomaly(anomaly, apiKey); err != nil {
 		log.Println("Failed commiting anomaly to database:", err)
 		if strings.Contains(err.Error(), "Error 1062: Duplicate entry") {
-			return errors.New("Anomaly already exists")
+			return errors.New("anomaly: Anomaly already exists")
 		}
 		return errors.New("Failed saving anomaly, try again later")
 	}
@@ -110,4 +113,29 @@ func AddAnomaly(anomaly Anomaly, apiKey APIKey) error {
 	log.Println("Added anomaly:", anomaly)
 
 	return nil
+}
+
+func ModifyAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
+	if !idRegex.MatchString(anomaly.ID) {
+		return nil, ErrAnomalyInvalidID
+	}
+	if anomaly.System != "" {
+		return nil, errors.New("anomaly: cannot update System")
+	}
+	if anomaly.Type == "" && anomaly.Name == "" {
+		return nil, errors.New("anomaly: must specify fields to update")
+	}
+
+	updatedAnomaly, err := UpdateAnomaly(anomaly, apiKey)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrAnomalyNotFound
+		}
+		return nil, err
+	}
+
+	log.Printf("Updated anomaly for key '%s': ", apiKey.Key)
+	log.Print(*updatedAnomaly)
+
+	return updatedAnomaly, nil
 }
