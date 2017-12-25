@@ -11,7 +11,7 @@ import (
 
 	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/routes"
 	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/tracker"
-	"golang.org/x/net/unix"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
