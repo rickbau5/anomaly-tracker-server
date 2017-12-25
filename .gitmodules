@@ -1,3 +1,6 @@
 [submodule "vendor/github.com/go-sql-driver/mysql"]
 	path = vendor/github.com/go-sql-driver/mysql
 	url = https://github.com/go-sql-driver/mysql
+[submodule "vendor/golang.org/x/sys"]
+	path = vendor/golang.org/x/sys
+	url = https://github.com/golang/sys
