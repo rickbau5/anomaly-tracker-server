@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Anomaly struct {
@@ -14,7 +15,10 @@ type Anomaly struct {
 	Type   AnomalyType `json:"type"`
 	Name   string      `json:"name"`
 
-	id int `json:"-"`
+	InternalID int       `json:"-"`
+	UserID     int       `json:"-"`
+	GroupID    int       `json:"-"`
+	Created    time.Time `json:"created"`
 }
 
 // Anomaly Errors

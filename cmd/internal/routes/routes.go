@@ -13,9 +13,10 @@ import (
 )
 
 type response struct {
-	Error   string           `json:"error,omitempty"`
-	Message string           `json:"message,omitempty"`
-	Anomaly *tracker.Anomaly `json:"anomaly,omitempty"`
+	Error     string            `json:"error,omitempty"`
+	Message   string            `json:"message,omitempty"`
+	Anomaly   *tracker.Anomaly  `json:"anomaly,omitempty"`
+	Anomalies []tracker.Anomaly `json:"anomalies,omitempty"`
 
 	StatusCode int `json:"-"`
 }
@@ -145,7 +146,19 @@ func updateAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
 }
 
 func getAnomalies(apiKey tracker.APIKey) response {
-	return response{}
+	anomalies, err := tracker.GetAnomaliesByAPIKey(apiKey)
+	if err != nil {
+		log.Println("Failed getting anomalies:", err.Error())
+		return response{
+			Error:      sanitizeError(err),
+			StatusCode: http.StatusNotAcceptable,
+		}
+	}
+	log.Printf("Found %d anomalies for api key '%s'.\n", len(anomalies), apiKey.Key)
+	return response{
+		Anomalies:  anomalies,
+		StatusCode: http.StatusOK,
+	}
 }
 
 func writeErrorResponse(message string, status int, w http.ResponseWriter) {

@@ -46,12 +46,7 @@ func awaitShutdown(server *http.Server) error {
 
 	err := server.Shutdown(ctx)
 	// Wait the rest of the time if context hasn't expired yet
-	select {
-	case _, ok := <-ctx.Done():
-		if !ok {
-			fmt.Println("Context closed.")
-		}
-	}
+	<-ctx.Done()
 
 	return err
 }

@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 )
 
 var (
 	appDB             *sql.DB
 	insertAnomalyStmt *sql.Stmt
 )
+
+const layout = "2006-01-02 15:04:05"
 
 func InitializeAppDB(conf AppConfig) error {
 	mysqlConfig := conf.BuildMySQLConfig()
@@ -49,7 +52,7 @@ func getAnomalyByAnomalyID(anomalyID string, userID int) (*Anomaly, error) {
 		anomalyID, userID)
 	anomaly := Anomaly{}
 	var str string
-	err := row.Scan(&anomaly.id, &anomaly.ID, &anomaly.System, &str, &anomaly.Name)
+	err := row.Scan(&anomaly.InternalID, &anomaly.ID, &anomaly.System, &str, &anomaly.Name)
 	anomaly.Type = GetAnomalyType(str)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -100,8 +103,7 @@ func UpdateAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
 		updates = append(updates, fmt.Sprintf("%s = '%s'", k, v))
 	}
 	sql += strings.Join(updates, ", ") + " WHERE id = ?"
-	log.Println("Update query:", sql)
-	_, err = appDB.Exec(sql, anom.id)
+	_, err = appDB.Exec(sql, anom.InternalID)
 	if err != nil {
 		log.Printf("Failed updating anomaly '%s' for key '%s'.\n", anom.ID, apiKey.Key)
 		return nil, err
@@ -110,16 +112,70 @@ func UpdateAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
 	return getAnomalyByAnomalyID(anomaly.ID, apiKey.UserID)
 }
 
+func GetAnomaliesByAPIKey(apiKey APIKey) ([]Anomaly, error) {
+	return GetAnomaliesInGroup(apiKey.GroupID)
+}
+
+func GetAnomaliesInGroup(groupID int) ([]Anomaly, error) {
+	rows, err := appDB.Query(`
+		SELECT
+			id, anom_id, anom_system, anom_type, anom_name, user_id, group_id, created_dttm
+		FROM
+			anomaly_tracker.anomalies
+		WHERE
+			group_id = ?`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return ScanAllAnomalies(rows)
+}
+
+func ScanAllAnomalies(rows *sql.Rows) ([]Anomaly, error) {
+	var (
+		anomalies []Anomaly
+		err       error
+	)
+	for rows.Next() {
+		if err = rows.Err(); err != nil {
+			return nil, err
+		}
+		var (
+			anomaly        Anomaly
+			createdDttmStr string
+		)
+		rows.Scan(&anomaly.InternalID, &anomaly.ID, &anomaly.System, &anomaly.Type, &anomaly.Name, &anomaly.UserID, &anomaly.GroupID, &createdDttmStr)
+		anomaly.Created, err = time.Parse(layout, createdDttmStr)
+		if err != nil {
+			log.Printf("Failed parsing anomaly time '%s': '%s'", createdDttmStr, err)
+			continue
+		}
+		anomalies = append(anomalies, anomaly)
+	}
+	return anomalies, nil
+}
+
 func CheckAPIKey(apiKey string) (*APIKey, error) {
-	row := appDB.QueryRow("SELECT * FROM anomaly_tracker.api_keys where `key` = ?;", apiKey)
-	var key APIKey
-	err := row.Scan(&key.ID, &key.Key, &key.Type, &key.UserID)
+	row := appDB.QueryRow("SELECT id, `key`, type, user_id, group_id, created_by, created_dttm FROM anomaly_tracker.api_keys WHERE `key` = ?", apiKey)
+
+	var (
+		key            APIKey
+		createdDttmStr string
+	)
+	err := row.Scan(&key.ID, &key.Key, &key.Type, &key.UserID, &key.GroupID, &key.CreatedBy, &createdDttmStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
+
+	key.CreatedDttm, err = time.Parse(layout, createdDttmStr)
+	if err != nil {
+		return nil, err
+	}
+
 	return &key, nil
 }
 
@@ -133,8 +189,11 @@ func CleanupAppDB() {
 }
 
 type APIKey struct {
-	ID     int
-	Key    string
-	Type   string
-	UserID int
+	ID          int
+	Key         string
+	Type        string
+	UserID      int
+	GroupID     int
+	CreatedBy   int
+	CreatedDttm time.Time
 }
