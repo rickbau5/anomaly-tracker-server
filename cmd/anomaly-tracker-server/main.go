@@ -11,7 +11,6 @@ import (
 
 	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/routes"
 	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/tracker"
-	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -38,16 +37,7 @@ func main() {
 
 func awaitShutdown(server *http.Server) error {
 	c := make(chan os.Signal)
-	signal.Notify(c,
-		os.Interrupt,
-		unix.SIGTERM,
-		unix.SIGINT,
-		unix.SIGABRT,
-		unix.SIGHUP,
-		unix.SIGKILL,
-		unix.SIGQUIT,
-		unix.SIGKILL,
-	)
+	signal.Notify(c, os.Interrupt)
 	stop := <-c
 	fmt.Println("Got stop signal:", stop.String())
 
