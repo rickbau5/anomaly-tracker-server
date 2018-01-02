@@ -86,6 +86,8 @@ func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 		resp = deleteAnomaly(anomaly, apiKey)
 	case http.MethodPatch:
 		resp = updateAnomaly(anomaly, apiKey)
+	case http.MethodGet:
+		resp = getAnomalies(apiKey)
 	default:
 		resp = response{
 			Error:      "Unrecognized method: " + r.Method,
@@ -140,6 +142,10 @@ func updateAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
 		Message:    "updated",
 		Anomaly:    updatedAnomaly,
 	}
+}
+
+func getAnomalies(apiKey tracker.APIKey) response {
+	return response{}
 }
 
 func writeErrorResponse(message string, status int, w http.ResponseWriter) {

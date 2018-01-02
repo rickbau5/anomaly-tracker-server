@@ -9,8 +9,10 @@ create table `anomaly_tracker`.`anomalies` (
     `anom_type` varchar(16) not null,
     `anom_name` varchar(64) not null,
     `user_id` int not null,
+    `group_id` int not null,
+    `created_dttm` datetime not null default NOW(),
     primary key (`id`),
-    unique key (`anom_id`, `user_id`)
+    unique key (`anom_id`, `group_id`)
 );
 
 create table `anomaly_tracker`.`api_keys` (
@@ -18,7 +20,12 @@ create table `anomaly_tracker`.`api_keys` (
     `key` varchar(64) not null,
     `type` varchar(32) not null default "user",
     `user_id` int not null,
-    primary key (`id`)
+    `group_id` int not null,
+    `created_by` int not null,
+    `created_dttm` datetime not null default NOW(),
+    primary key (`id`),
+    unique key (`key`),
+    unique key (`user_id`, `group_id`)
 );
 
 create table `anomaly_tracker`.`users` (
@@ -28,12 +35,32 @@ create table `anomaly_tracker`.`users` (
     primary key (`id`)
 );
 
+create table `anomaly_tracker`.`user_groups` (
+    `id` int not null auto_increment,
+    `name` varchar(32),
+    `created_by` int not null,
+    primary key (`id`)
+);
+
+create table `anomaly_tracker`.`user_groups_members` (
+    `group_id` int not null,
+    `user_id` int not null,
+    `created_by` int not null,
+    `created_dttm` datetime not null default NOW(),
+    primary key (`group_id`, `user_id`)
+);
+
 insert anomaly_tracker.users (`username`) 
     values ('rboss'), ('bpowers'), ('zharvest');
-insert anomaly_tracker.api_keys (`key`, `user_id`) values 
-    ('00000-00000-0000-00000-00000', 0),
-    ('00000-00000-0000-00000-00001', 1),
-    ('00000-00000-0000-00000-00002', 2);
+
+insert anomaly_tracker.user_groups (`name`, `created_by`) values
+	('Rick\'s Group', 0),
+    ('Zach\'s Group', 1);
+
+insert anomaly_tracker.api_keys (`key`, `user_id`, `group_id`, `created_by`) values
+    ('00000-00000-0000-00000-00000', 0, 0, 0),
+    ('00000-00000-0000-00000-00001', 1, 0, 0),
+    ('00000-00000-0000-00000-00002', 2, 1, 2);
 
 insert anomaly_tracker.anomalies 
         (`anom_id`, `anom_system`, `anom_type`, `anom_name`, `user_id`)
