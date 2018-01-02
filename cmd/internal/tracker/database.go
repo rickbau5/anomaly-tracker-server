@@ -29,9 +29,9 @@ func InitializeAppDB(conf AppConfig) error {
 
 	insertAnomalyStmt, err = appDB.Prepare(`
 		INSERT anomaly_tracker.anomalies 
-			(anom_id, anom_system, anom_type, anom_name, user_id) 
+			(anom_id, anom_system, anom_type, anom_name, user_id, group_id), 
 		VALUES 
-			( ?, ?, ?, ?, ? )`)
+			( ?, ?, ?, ?, ?, ? )`)
 	if err != nil {
 		log.Println("Failed prepareing insert statement:", err.Error())
 		return err
@@ -43,13 +43,13 @@ func InitializeAppDB(conf AppConfig) error {
 }
 
 func CommitAnomaly(anomaly Anomaly, apiKey APIKey) error {
-	_, err := insertAnomalyStmt.Exec(anomaly.ID, anomaly.System, string(anomaly.Type), anomaly.Name, apiKey.UserID)
+	_, err := insertAnomalyStmt.Exec(anomaly.ID, anomaly.System, string(anomaly.Type), anomaly.Name, apiKey.UserID, apiKey.GroupID)
 	return err
 }
 
-func getAnomalyByAnomalyID(anomalyID string, userID int) (*Anomaly, error) {
-	row := appDB.QueryRow(`SELECT id, anom_id, anom_system, anom_type, anom_name FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ?`,
-		anomalyID, userID)
+func getAnomalyByAnomalyIDs(anomalyID string, userID, groupID int) (*Anomaly, error) {
+	row := appDB.QueryRow(`SELECT id, anom_id, anom_system, anom_type, anom_name FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ? and group_id = ?`,
+		anomalyID, userID, groupID)
 	anomaly := Anomaly{}
 	var str string
 	err := row.Scan(&anomaly.InternalID, &anomaly.ID, &anomaly.System, &str, &anomaly.Name)
@@ -65,8 +65,8 @@ func getAnomalyByAnomalyID(anomalyID string, userID int) (*Anomaly, error) {
 
 func DeleteAnomaly(anomaly Anomaly, apiKey APIKey) error {
 	row := appDB.QueryRow(
-		"SELECT id FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ?",
-		anomaly.ID, apiKey.UserID,
+		"SELECT id FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ? and group_id = ?",
+		anomaly.ID, apiKey.UserID, apiKey.GroupID,
 	)
 	var anomalyDBID int
 	if err := row.Scan(&anomalyDBID); err != nil {
@@ -86,7 +86,7 @@ func DeleteAnomaly(anomaly Anomaly, apiKey APIKey) error {
 }
 
 func UpdateAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
-	anom, err := getAnomalyByAnomalyID(anomaly.ID, apiKey.UserID)
+	anom, err := getAnomalyByAnomalyIDs(anomaly.ID, apiKey.UserID, apiKey.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func UpdateAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
 		return nil, err
 	}
 
-	return getAnomalyByAnomalyID(anomaly.ID, apiKey.UserID)
+	return getAnomalyByAnomalyIDs(anomaly.ID, apiKey.UserID, apiKey.GroupID)
 }
 
 func GetAnomaliesByAPIKey(apiKey APIKey) ([]Anomaly, error) {
