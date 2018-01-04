@@ -6,6 +6,8 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	atp "github.com/rickbau5/anomaly-tracker-proto"
 )
 
 var (
@@ -18,7 +20,7 @@ const layout = "2006-01-02 15:04:05"
 func InitializeAppDB(conf AppConfig) error {
 	mysqlConfig := conf.BuildMySQLConfig()
 	dsn := mysqlConfig.FormatDSN()
-	log.Println("Connecting to", mysqlConfig.Addr)
+	log.Println("Connecting to database at:", mysqlConfig.Addr)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		log.Println("Failed opening mysql connection:", mysqlConfig.Addr, mysqlConfig.User)
@@ -27,9 +29,10 @@ func InitializeAppDB(conf AppConfig) error {
 	log.Println("Connected to app db.")
 	appDB = db
 
+	log.Println("Preparing insert statement...")
 	insertAnomalyStmt, err = appDB.Prepare(`
 		INSERT anomaly_tracker.anomalies 
-			(anom_id, anom_system, anom_type, anom_name, user_id, group_id), 
+			(anom_id, anom_system, anom_type, anom_name, user_id, group_id)
 		VALUES 
 			( ?, ?, ?, ?, ?, ? )`)
 	if err != nil {
@@ -42,31 +45,35 @@ func InitializeAppDB(conf AppConfig) error {
 	return nil
 }
 
-func CommitAnomaly(anomaly Anomaly, apiKey APIKey) error {
-	_, err := insertAnomalyStmt.Exec(anomaly.ID, anomaly.System, string(anomaly.Type), anomaly.Name, apiKey.UserID, apiKey.GroupID)
+func CommitAnomaly(anomaly atp.Anomaly, apiKey APIKey) error {
+	_, err := insertAnomalyStmt.Exec(anomaly.Id, anomaly.System, anomaly.Type, anomaly.Name, apiKey.UserID, apiKey.GroupID)
 	return err
 }
 
-func getAnomalyByAnomalyIDs(anomalyID string, userID, groupID int) (*Anomaly, error) {
-	row := appDB.QueryRow(`SELECT id, anom_id, anom_system, anom_type, anom_name FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ? and group_id = ?`,
-		anomalyID, userID, groupID)
-	anomaly := Anomaly{}
-	var str string
-	err := row.Scan(&anomaly.InternalID, &anomaly.ID, &anomaly.System, &str, &anomaly.Name)
-	anomaly.Type = GetAnomalyType(str)
+func getAnomalyByAnomalyIDs(anomalyID string, userID, groupID int) (*atp.Anomaly, error) {
+	rows, err := appDB.Query(`
+			SELECT
+				id, anom_id, anom_system, anom_type, anom_name, user_id, group_id, created_dttm
+			FROM
+				anomaly_tracker.anomalies
+			WHERE
+				anom_id = ? and user_id = ? and group_id = ?
+			LIMIT 1
+		`, anomalyID, userID, groupID)
+	anomalies, err := ScanAllAnomalies(rows)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrAnomalyNotFound
 		}
 		return nil, err
 	}
-	return &anomaly, nil
+	return &anomalies[0], nil
 }
 
-func DeleteAnomaly(anomaly Anomaly, apiKey APIKey) error {
+func DeleteAnomaly(anomaly atp.Anomaly, apiKey APIKey) error {
 	row := appDB.QueryRow(
 		"SELECT id FROM anomaly_tracker.anomalies where anom_id = ? and user_id = ? and group_id = ?",
-		anomaly.ID, apiKey.UserID, apiKey.GroupID,
+		anomaly.GetId(), apiKey.UserID, apiKey.GroupID,
 	)
 	var anomalyDBID int
 	if err := row.Scan(&anomalyDBID); err != nil {
@@ -75,7 +82,7 @@ func DeleteAnomaly(anomaly Anomaly, apiKey APIKey) error {
 		}
 		return err
 	}
-	log.Printf("Deleting anomaly id '%s' (%d) for API key '%s'.\n", anomaly.ID, anomalyDBID, apiKey.Key)
+	log.Printf("Deleting anomaly id '%s' (%d) for API key '%s'.\n", anomaly.GetId(), anomalyDBID, apiKey.Key)
 	res, err := appDB.Exec("DELETE FROM anomaly_tracker.anomalies where id = ?", anomalyDBID)
 	if err != nil {
 		return err
@@ -85,38 +92,38 @@ func DeleteAnomaly(anomaly Anomaly, apiKey APIKey) error {
 	return nil
 }
 
-func UpdateAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
-	anom, err := getAnomalyByAnomalyIDs(anomaly.ID, apiKey.UserID, apiKey.GroupID)
+func UpdateAnomaly(anomaly atp.Anomaly, apiKey APIKey) (*atp.Anomaly, error) {
+	anom, err := getAnomalyByAnomalyIDs(anomaly.GetId(), apiKey.UserID, apiKey.GroupID)
 	if err != nil {
 		return nil, err
 	}
 	sql := `UPDATE anomaly_tracker.anomalies SET `
 	toUpdate := make(map[string]string)
-	if anomaly.Name != "" {
-		toUpdate["anom_name"] = anomaly.Name
+	if name := anomaly.GetName(); name != "" {
+		toUpdate["anom_name"] = name
 	}
-	if anomaly.Type != "" {
-		toUpdate["anom_type"] = string(anomaly.Type)
+	if typ := anomaly.GetType(); typ != "" {
+		toUpdate["anom_type"] = typ
 	}
 	var updates []string
 	for k, v := range toUpdate {
 		updates = append(updates, fmt.Sprintf("%s = '%s'", k, v))
 	}
 	sql += strings.Join(updates, ", ") + " WHERE id = ?"
-	_, err = appDB.Exec(sql, anom.InternalID)
+	_, err = appDB.Exec(sql, anom.InternalId)
 	if err != nil {
-		log.Printf("Failed updating anomaly '%s' for key '%s'.\n", anom.ID, apiKey.Key)
+		log.Printf("Failed updating anomaly '%s' for key '%s'.\n", anom.Id, apiKey.Key)
 		return nil, err
 	}
 
-	return getAnomalyByAnomalyIDs(anomaly.ID, apiKey.UserID, apiKey.GroupID)
+	return getAnomalyByAnomalyIDs(anomaly.GetId(), apiKey.UserID, apiKey.GroupID)
 }
 
-func GetAnomaliesByAPIKey(apiKey APIKey) ([]Anomaly, error) {
+func GetAnomaliesByAPIKey(apiKey APIKey) ([]atp.Anomaly, error) {
 	return GetAnomaliesInGroup(apiKey.GroupID)
 }
 
-func GetAnomaliesInGroup(groupID int) ([]Anomaly, error) {
+func GetAnomaliesInGroup(groupID int) ([]atp.Anomaly, error) {
 	rows, err := appDB.Query(`
 		SELECT
 			id, anom_id, anom_system, anom_type, anom_name, user_id, group_id, created_dttm
@@ -132,23 +139,19 @@ func GetAnomaliesInGroup(groupID int) ([]Anomaly, error) {
 	return ScanAllAnomalies(rows)
 }
 
-func ScanAllAnomalies(rows *sql.Rows) ([]Anomaly, error) {
+func ScanAllAnomalies(rows *sql.Rows) ([]atp.Anomaly, error) {
 	var (
-		anomalies []Anomaly
+		anomalies []atp.Anomaly
 		err       error
 	)
 	for rows.Next() {
 		if err = rows.Err(); err != nil {
 			return nil, err
 		}
-		var (
-			anomaly        Anomaly
-			createdDttmStr string
-		)
-		rows.Scan(&anomaly.InternalID, &anomaly.ID, &anomaly.System, &anomaly.Type, &anomaly.Name, &anomaly.UserID, &anomaly.GroupID, &createdDttmStr)
-		anomaly.Created, err = time.Parse(layout, createdDttmStr)
+		anomaly := atp.Anomaly{}
+		err := rows.Scan(&anomaly.InternalId, &anomaly.Id, &anomaly.System, &anomaly.Type, &anomaly.Name, &anomaly.UserId, &anomaly.GroupId, &anomaly.Created)
 		if err != nil {
-			log.Printf("Failed parsing anomaly time '%s': '%s'", createdDttmStr, err)
+			log.Println("Failed scanning row:", err)
 			continue
 		}
 		anomalies = append(anomalies, anomaly)

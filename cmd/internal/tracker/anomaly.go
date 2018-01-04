@@ -6,20 +6,9 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"time"
+
+	atp "github.com/rickbau5/anomaly-tracker-proto"
 )
-
-type Anomaly struct {
-	ID     string      `json:"id"`
-	System string      `json:"system"`
-	Type   AnomalyType `json:"type"`
-	Name   string      `json:"name"`
-
-	InternalID int       `json:"-"`
-	UserID     int       `json:"-"`
-	GroupID    int       `json:"-"`
-	Created    time.Time `json:"created"`
-}
 
 // Anomaly Errors
 var (
@@ -46,23 +35,6 @@ const (
 	UnknownAnomaly AnomalyType = "unknown"
 )
 
-func GetAnomalyType(str string) AnomalyType {
-	switch AnomalyType(str) {
-	case CombatAnomaly:
-		return CombatAnomaly
-	case DataAnomaly:
-		return DataAnomaly
-	case RelicAnomaly:
-		return RelicAnomaly
-	case GasAnomaly:
-		return GasAnomaly
-	case IceAnomaly:
-		return IceAnomaly
-	default:
-		return UnknownAnomaly
-	}
-}
-
 func IsErrAnomaly(err error) bool {
 	return strings.Contains(err.Error(), "anomaly:")
 }
@@ -76,36 +48,11 @@ func GetErrAnomalyMessage(err error) string {
 	return str
 }
 
-func (a *Anomaly) Validate() error {
-	if a.ID == "" {
-		return ErrAnomalyMissingID
+func AddAnomaly(anomaly atp.Anomaly, apiKey APIKey) error {
+	if !anomaly.Publishable() {
+		log.Println("Cannot commit incomplete anomaly.")
+		return errors.New("anomaly: incomplete details")
 	}
-	if !idRegex.MatchString(a.ID) {
-		return ErrAnomalyInvalidID
-	}
-	if a.System == "" {
-		return ErrAnomalyMissingSystem
-	}
-	if a.Type == "" {
-		return ErrAnomalyMissingType
-	}
-	anomalyType := GetAnomalyType(string(a.Type))
-	if anomalyType == UnknownAnomaly {
-		return ErrAnomalyInvalidType
-	}
-	a.Type = anomalyType
-	if a.Name == "" {
-		return ErrAnomalyMissingName
-	}
-
-	return nil
-}
-
-func AddAnomaly(anomaly Anomaly, apiKey APIKey) error {
-	if err := anomaly.Validate(); err != nil {
-		return err
-	}
-
 	if err := CommitAnomaly(anomaly, apiKey); err != nil {
 		log.Println("Failed commiting anomaly to database:", err)
 		if strings.Contains(err.Error(), "Error 1062: Duplicate entry") {
@@ -119,14 +66,14 @@ func AddAnomaly(anomaly Anomaly, apiKey APIKey) error {
 	return nil
 }
 
-func ModifyAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
-	if !idRegex.MatchString(anomaly.ID) {
+func ModifyAnomaly(anomaly atp.Anomaly, apiKey APIKey) (*atp.Anomaly, error) {
+	if !idRegex.MatchString(anomaly.GetId()) {
 		return nil, ErrAnomalyInvalidID
 	}
-	if anomaly.System != "" {
+	if anomaly.GetSystem() != "" {
 		return nil, errors.New("anomaly: cannot update System")
 	}
-	if anomaly.Type == "" && anomaly.Name == "" {
+	if anomaly.GetType() == "" && anomaly.GetName() == "" {
 		return nil, errors.New("anomaly: must specify fields to update")
 	}
 
@@ -139,7 +86,6 @@ func ModifyAnomaly(anomaly Anomaly, apiKey APIKey) (*Anomaly, error) {
 	}
 
 	log.Printf("Updated anomaly for key '%s': ", apiKey.Key)
-	log.Print(*updatedAnomaly)
 
 	return updatedAnomaly, nil
 }

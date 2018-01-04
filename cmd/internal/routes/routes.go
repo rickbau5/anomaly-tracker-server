@@ -4,19 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 
+	"github.com/golang/protobuf/jsonpb"
+	atp "github.com/rickbau5/anomaly-tracker-proto"
 	"github.com/rickbau5/anomaly-tracker-server/cmd/internal/tracker"
 )
 
 type response struct {
-	Error     string            `json:"error,omitempty"`
-	Message   string            `json:"message,omitempty"`
-	Anomaly   *tracker.Anomaly  `json:"anomaly,omitempty"`
-	Anomalies []tracker.Anomaly `json:"anomalies,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Message   string        `json:"message,omitempty"`
+	Anomaly   *atp.Anomaly  `json:"anomaly,omitempty"`
+	Anomalies []atp.Anomaly `json:"anomalies,omitempty"`
 
 	StatusCode int `json:"-"`
 }
@@ -63,30 +64,23 @@ func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var anomaly tracker.Anomaly
-
+	var protoAnomaly atp.Anomaly
 	if r.Method != http.MethodGet {
-		bytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			writeErrorResponse("Failed reading body", http.StatusNotAcceptable, w)
-			return
+		if err := jsonpb.Unmarshal(r.Body, &protoAnomaly); err != nil {
+			log.Println("Cannot unmarshal to Anomaly proto:", err)
 		}
-
-		err = json.Unmarshal(bytes, &anomaly)
-		if err != nil {
-			writeErrorResponse("Failed reading anomaly", http.StatusNotAcceptable, w)
-			return
-		}
+		bytes, _ := json.MarshalIndent(protoAnomaly, "", "  ")
+		log.Println("Got Anomaly:", string(bytes))
 	}
 
 	var resp response
 	switch r.Method {
 	case http.MethodPost:
-		resp = addAnomaly(anomaly, apiKey)
+		resp = addAnomaly(protoAnomaly, apiKey)
 	case http.MethodDelete:
-		resp = deleteAnomaly(anomaly, apiKey)
+		resp = deleteAnomaly(protoAnomaly, apiKey)
 	case http.MethodPatch:
-		resp = updateAnomaly(anomaly, apiKey)
+		resp = updateAnomaly(protoAnomaly, apiKey)
 	case http.MethodGet:
 		resp = getAnomalies(apiKey)
 	default:
@@ -98,9 +92,8 @@ func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 	writeFullResponse(resp, w)
 }
 
-func addAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
-	err := tracker.AddAnomaly(anomaly, apiKey)
-	if err != nil {
+func addAnomaly(anomaly atp.Anomaly, apiKey tracker.APIKey) response {
+	if err := tracker.AddAnomaly(anomaly, apiKey); err != nil {
 		log.Println("Failed adding anomaly:", err.Error())
 		return response{
 			Error:      sanitizeError(err),
@@ -114,7 +107,7 @@ func addAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
 	}
 }
 
-func deleteAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
+func deleteAnomaly(anomaly atp.Anomaly, apiKey tracker.APIKey) response {
 	err := tracker.DeleteAnomaly(anomaly, apiKey)
 	if err != nil {
 		log.Println("Failed deleting anomaly:", err.Error())
@@ -129,7 +122,7 @@ func deleteAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
 	}
 }
 
-func updateAnomaly(anomaly tracker.Anomaly, apiKey tracker.APIKey) response {
+func updateAnomaly(anomaly atp.Anomaly, apiKey tracker.APIKey) response {
 	updatedAnomaly, err := tracker.ModifyAnomaly(anomaly, apiKey)
 	if err != nil {
 		log.Println("Failed updating anomaly:", err.Error())
@@ -180,8 +173,36 @@ func writeResponse(res response, w http.ResponseWriter) {
 	w.Write(bytes)
 }
 
+func sanitizeResponse(res response) response {
+	sanitized := res
+	sanitizeAnomaly := func(anom atp.Anomaly) atp.Anomaly {
+		return atp.Anomaly{
+			Id:      anom.Id,
+			System:  anom.System,
+			Type:    anom.Type,
+			Name:    anom.Name,
+			Created: anom.Created,
+		}
+	}
+
+	if sanitized.Anomaly != nil {
+		cleanedAnomaly := sanitizeAnomaly(*res.Anomaly)
+		sanitized.Anomaly = &cleanedAnomaly
+	}
+	if sanitized.Anomalies != nil {
+		var anomalies []atp.Anomaly
+		for _, anom := range sanitized.Anomalies {
+			cleanedAnomaly := sanitizeAnomaly(anom)
+			anomalies = append(anomalies, cleanedAnomaly)
+		}
+		sanitized.Anomalies = anomalies
+	}
+	return sanitized
+}
+
 func writeFullResponse(res response, w http.ResponseWriter) {
-	bytes, err := json.MarshalIndent(res, "", "    ")
+	cleanResponse := sanitizeResponse(res)
+	bytes, err := json.MarshalIndent(cleanResponse, "", "    ")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

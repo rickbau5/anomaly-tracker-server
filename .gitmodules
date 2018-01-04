@@ -4,3 +4,9 @@
 [submodule "vendor/golang.org/x/sys"]
 	path = vendor/golang.org/x/sys
 	url = https://github.com/golang/sys
+[submodule "vendor/github.com/rickbau5/anomaly-tracker-proto"]
+	path = vendor/github.com/rickbau5/anomaly-tracker-proto
+	url = https://github.com/rickbau5/anomaly-tracker-proto
+[submodule "vendor/github.com/golang/protobuf"]
+	path = vendor/github.com/golang/protobuf
+	url = https://github.com/golang/protobuf
