@@ -14,7 +14,7 @@ create table `anomaly_tracker`.`user_groups` (
     `name` varchar(32),
     `created_by` int not null,
     primary key (`id`),
-    foreign key (`created_by`) references users(`id`)
+    foreign key (`created_by`) references `anomaly_tracker`.`users`(`id`)
 );
 
 create table `anomaly_tracker`.`user_groups_members` (
@@ -23,9 +23,9 @@ create table `anomaly_tracker`.`user_groups_members` (
     `created_by` int not null,
     `created_dttm` datetime not null default NOW(),
     primary key (`group_id`, `user_id`),
-    foreign key (`group_id`) references user_groups(`id`),
-    foreign key (`user_id`) references users(`id`),
-    foreign key (`created_by`) references users(`id`)
+    foreign key (`group_id`)   references `anomaly_tracker`.`user_groups`(`id`),
+    foreign key (`user_id`)    references `anomaly_tracker`.`users`(`id`),
+    foreign key (`created_by`) references `anomaly_tracker`.`users`(`id`)
 );
 
 create table `anomaly_tracker`.`anomalies` (
@@ -39,8 +39,8 @@ create table `anomaly_tracker`.`anomalies` (
     `created_dttm` datetime not null default NOW(),
     primary key (`id`),
     unique key (`anom_id`, `group_id`),
-    foreign key (`user_id`) references users(`id`),
-    foreign key (`group_id`) references user_groups(`id`)
+    foreign key (`user_id`)  references `anomaly_tracker`.`users`(`id`),
+    foreign key (`group_id`) references `anomaly_tracker`.`user_groups`(`id`)
 );
 
 create table `anomaly_tracker`.`api_keys` (
@@ -54,7 +54,7 @@ create table `anomaly_tracker`.`api_keys` (
     primary key (`id`),
     unique key (`key`),
     unique key (`user_id`, `group_id`),
-    foreign key (`user_id`) references users(`id`),
-    foreign key (`group_id`) references user_groups(`id`),
-    foreign key (`created_by`) references users(`id`)
+    foreign key (`user_id`)     references `anomaly_tracker`.`users`(`id`),
+    foreign key (`group_id`)    references `anomaly_tracker`.`user_groups`(`id`),
+    foreign key (`created_by`)  references `anomaly_tracker`.`users`(`id`)
 );

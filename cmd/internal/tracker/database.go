@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	atp "github.com/rickbau5/anomaly-tracker-proto"
 )
 
@@ -149,7 +150,18 @@ func ScanAllAnomalies(rows *sql.Rows) ([]atp.Anomaly, error) {
 			return nil, err
 		}
 		anomaly := atp.Anomaly{}
-		err := rows.Scan(&anomaly.InternalId, &anomaly.Id, &anomaly.System, &anomaly.Type, &anomaly.Name, &anomaly.UserId, &anomaly.GroupId, &anomaly.Created)
+		var createdDttmStr string
+		err := rows.Scan(&anomaly.InternalId, &anomaly.Id, &anomaly.System, &anomaly.Type, &anomaly.Name, &anomaly.UserId, &anomaly.GroupId, &createdDttmStr)
+		t, err := time.Parse(layout, createdDttmStr)
+		if err != nil {
+			log.Println("Failed scanning anomaly time:", err)
+		} else {
+			anomaly.Created, err = ptypes.TimestampProto(t)
+			if err != nil {
+				log.Println("Failed converting time to TimestampProto:", err)
+			}
+		}
+
 		if err != nil {
 			log.Println("Failed scanning row:", err)
 			continue
