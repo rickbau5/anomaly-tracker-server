@@ -61,7 +61,7 @@ func AddAnomaly(anomaly atp.Anomaly, apiKey APIKey) error {
 		return errors.New("Failed saving anomaly, try again later")
 	}
 
-	log.Println("Added anomaly:", anomaly)
+	log.Println("Added anomaly:", anomaly.Id)
 
 	return nil
 }

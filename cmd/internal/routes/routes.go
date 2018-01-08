@@ -1,9 +1,11 @@
 package routes
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -60,17 +62,18 @@ func handleAnomaly(w http.ResponseWriter, r *http.Request) {
 	apiKey, ok := i.(tracker.APIKey)
 	if !ok {
 		log.Println("Got a weird api key")
-		writeErrorResponse("Interanl error", http.StatusInternalServerError, w)
+		writeErrorResponse("Internal error", http.StatusInternalServerError, w)
 		return
 	}
 
 	var protoAnomaly atp.Anomaly
 	if r.Method != http.MethodGet {
-		if err := jsonpb.Unmarshal(r.Body, &protoAnomaly); err != nil {
+		bs, _ := ioutil.ReadAll(r.Body)
+		fmt.Println(string(bs))
+		if err := jsonpb.Unmarshal(bytes.NewBuffer(bs), &protoAnomaly); err != nil {
 			log.Println("Cannot unmarshal to Anomaly proto:", err)
 		}
-		bytes, _ := json.MarshalIndent(protoAnomaly, "", "  ")
-		log.Println("Got Anomaly:", string(bytes))
+		bs, _ = json.MarshalIndent(protoAnomaly, "", "  ")
 	}
 
 	var resp response
