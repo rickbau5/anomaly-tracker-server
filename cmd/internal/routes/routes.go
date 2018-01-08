@@ -180,11 +180,12 @@ func sanitizeResponse(res response) response {
 	sanitized := res
 	sanitizeAnomaly := func(anom atp.Anomaly) atp.Anomaly {
 		return atp.Anomaly{
-			Id:      anom.Id,
-			System:  anom.System,
-			Type:    anom.Type,
-			Name:    anom.Name,
-			Created: anom.Created,
+			Id:       anom.Id,
+			System:   anom.System,
+			Type:     anom.Type,
+			Name:     anom.Name,
+			Created:  anom.Created,
+			Editable: anom.Editable,
 		}
 	}
 

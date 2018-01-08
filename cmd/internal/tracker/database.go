@@ -129,9 +129,11 @@ func GetAnomaliesByAPIKey(apiKey APIKey) ([]atp.Anomaly, error) {
 	var anomaliesToReturn []atp.Anomaly
 	for _, anomaly := range anomalies {
 		anomaly.Editable = int64(apiKey.UserID) == anomaly.GetUserId()
+		anomaliesToReturn = append(anomaliesToReturn, anomaly)
 	}
-	return
+	return anomaliesToReturn, nil
 }
+
 func GetAnomaliesInGroup(groupID int) ([]atp.Anomaly, error) {
 	rows, err := appDB.Query(`
 		SELECT
